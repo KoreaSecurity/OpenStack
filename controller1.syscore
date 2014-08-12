@@ -1,0 +1,211 @@
+#!/bin/bash
+echo -e '\E[40;33m'"\033[1m"[*]  SYSCORE OPENSTACK CONTROLLER INSTALL,SETTINGS SCRIPT" \033[0m"
+
+
+export  SYSCORE_CONTROLLER_IP=192.168.0.47
+export  SYSCORE_COMPUTE01_IP=203.237.143.161
+export  SYSCORE_COMPUTE02_IP=203.237.143.161
+export  SYSCORE_COMPUTE03_IP=203.237.143.161
+export  SYSCORE_COMPUTE04_IP=203.237.143.161
+
+
+
+
+echo $SYSCORE_CONTROLLER_IP controller >> /etc/hosts
+echo $SYSCORE_CONTROLLER_IP controller2 >> /etc/hosts
+echo $SYSCORE_COMPUTE01_IP compute01 >> /etc/hosts
+echo $SYSCORE_COMPUTE02_IP compute02 >> /etc/hosts
+echo $SYSCORE_COMPUTE03_IP compute03 >> /etc/hosts
+echo $SYSCORE_COMPUTE04_IP compute04 >> /etc/hosts
+
+
+
+
+
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  /Module Settings" \033[0m"
+
+apt-get install -y ntp
+
+
+
+sed -i 's/server ntp.ubuntu.com/server controller/g' /etc/ntp.conf
+
+service ntp restart
+
+
+sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/my.cnf
+service mysql restart
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  RABBIT MQ Settings" \033[0m"
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  MYSQL Settings" \033[0m"
+
+
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  sysctl  Settings" \033[0m"
+
+sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+
+sysctl net.ipv4.ip_forward=1
+
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  Keystone Settings" \033[0m"
+
+
+sed -i 's/sqlite:\/\/\/\/var\/lib\/keystone\/keystone.db/mysql:\/\/keystone:openstacktest@controller\/keystone/g' /etc/keystone/keystone.conf
+
+
+rm /var/lib/keystone/keystone.db
+
+service keystone restart
+keystone-manage db_sync
+
+echo -e '\E[40;31m'"\033[1m"[*]  SCRIPT DOWNLOAD" \033[0m"
+wget https://raw2.github.com/Ch00k/OpenStack-Havana-Install-Guide/master/keystone_basic.sh
+wget https://raw2.github.com/Ch00k/OpenStack-Havana-Install-Guide/master/keystone_endpoints_basic.sh
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  SCRIPT SETTINGS" \033[0m"
+
+sed -i 's/10.10.10.51/controller/g' keystone_basic.sh
+sed -i 's/10.10.10.51/controller/g' keystone_endpoints_basic.sh
+sed -i 's/192.168.1.251/controller2/g' keystone_endpoints_basic.sh
+echo -e '\E[40;31m'"\033[1m"[*]  SCRIPT SETUP" \033[0m"
+sh keystone_basic.sh
+sh keystone_endpoints_basic.sh
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  NEW KEYSOTONE SOURCE" \033[0m"
+
+echo "export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=openstacktest
+export OS_AUTH_URL=\"http://controller:5000/v2.0/\"" >> keystone_source
+
+
+source keystone_source
+echo -e '\E[40;31m'"\033[1m"[*]  GLANCE SETTINGS" \033[0m"
+
+
+
+sed -i "s/\[filter:authtoken\]//"g /etc/glance/glance-api-paste.ini
+
+sed -i "s/paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory//"g /etc/glance/glance-api-paste.ini
+
+
+
+
+echo "[filter:authtoken]
+paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
+auth_host = controller
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = glance
+admin_password = openstacktest" >> /etc/glance/glance-api-paste.ini
+
+
+
+
+sed -i "s/\[filter:authtoken\]//"g /etc/glance/glance-registry-paste.ini
+
+sed -i "s/paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory//"g /etc/glance/glance-registry-paste.ini
+
+
+
+echo "[filter:authtoken]
+paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
+auth_host = controller
+auth_port = 35357
+auth_protocol = http
+admin_tenant_name = service
+admin_user = glance
+admin_password = openstacktest" >> /etc/glance/glance-registry-paste.ini
+
+
+
+
+
+
+
+sed -i 's/auth_host = 127.0.0.1/auth_host = controller/g' /etc/glance/glance-api.conf
+sed -i 's/%SERVICE_TENANT_NAME%/service/g' /etc/glance/glance-api.conf
+sed -i 's/%SERVICE_USER%/glance/g' /etc/glance/glance-api.conf
+sed -i 's/%SERVICE_PASSWORD%/openstacktest/g' /etc/glance/glance-api.conf
+echo "flavor = keystone" >> /etc/glance/glance-api.conf
+
+
+
+sed -i 's/auth_host = 127.0.0.1/auth_host = controller/g' /etc/glance/glance-registry.conf
+sed -i 's/%SERVICE_TENANT_NAME%/service/g' /etc/glance/glance-registry.conf
+sed -i 's/%SERVICE_USER%/glance/g' /etc/glance/glance-registry.conf
+sed -i 's/%SERVICE_PASSWORD%/openstacktest/g' /etc/glance/glance-registry.conf
+echo "flavor = keystone" >> /etc/glance/glance-registry.conf
+
+sed -i 's/sqlite:\/\/\/\/var\/lib\/glance\/glance.sqlite/mysql:\/\/glance:openstacktest@controller\/glance/g' /etc/glance/glance-registry.conf
+sed -i 's/sqlite:\/\/\/\/var\/lib\/glance\/glance.sqlite/mysql:\/\/glance:openstacktest@controller\/glance/g' /etc/glance/glance-api.conf
+
+
+
+rm /var/lib/glance/glance.sqlite
+
+service glance-api restart; service glance-registry restart
+
+glance-manage db_sync
+
+service glance-registry restart; service glance-api restart
+
+
+
+
+
+glance image-list
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  Neutron  Settings" \033[0m"
+
+
+
+ovs-vsctl add-br br-int
+
+ovs-vsctl add-br br-ex
+
+
+
+
+
+echo "
+
+auto eth1
+iface eth1 inet manual
+up ifconfig $IFACE 0.0.0.0 up
+up ip link set $IFACE promisc on
+down ip link set $IFACE promisc off
+down ifconfig $IFACE down" >> /etc/network/interfaces
+
+
+ovs-vsctl add-port br-ex eth1
+
+
+echo "
+
+auto br-ex
+iface br-ex inet dhcp" >> /etc/network/interfaces
+
+
+
+
+echo -e '\E[40;31m'"\033[1m"[*]  Reboot Mode  Next Controller2.syscore  Plz Reboot" \033[0m"
+
+
