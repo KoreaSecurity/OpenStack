@@ -7,7 +7,7 @@ EXT_HOST_IP=SyscoreLab
 MYSQL_USER=keystone
 MYSQL_DATABASE=keystone
 MYSQL_HOST=$HOST_IP
-MYSQL_PASSWORD=openstacktest
+MYSQL_PASSWORD=syscorepass
 
 # Keystone definitions
 KEYSTONE_REGION=RegionOne
